@@ -455,29 +455,42 @@ namespace SleepyDiscord {
 	void VoiceConnection::processIncomingAudio(const std::vector<uint8_t>& data)
 	{
 #if !defined(NONEXISTENT_SODIUM) || !defined(NONEXISTENT_OPUS)
+		// this only works for xsalsa20_poly1305 which takes the rtp header(12byte) and 12 byte zeros as nonce
+
 		//get nonce
 		uint8_t nonce[nonceSize];
 		std::memcpy(nonce, data.data(), sizeof nonce);
+
 		//decrypt
 		std::vector<uint8_t> decryptedData;
-		const std::size_t decryptedDataSize = data.size() - sizeof nonce;
+		//const std::size_t decryptedDataSize = data.size() - sizeof nonce;
+		const std::size_t decryptedDataSize = data.size() - 12;
 		decryptedData.reserve(decryptedDataSize);
 		bool isForged = crypto_secretbox_open_easy(
 			decryptedData.data(),
-			data.data() + sizeof nonce,
+			//data.data() + sizeof nonce,
+			data.data() + 12,
 			decryptedDataSize, nonce, secretKey.data()
 		) != 0;
 		if (isForged)
 			return;
+
 		//decode
 		constexpr opus_int32 frameSize = 
-			static_cast<opus_int32>(AudioTransmissionDetails::proposedLength());
+			static_cast<opus_int32>(AudioTransmissionDetails::proposedLength() / 2); // per channel
+
 		BaseAudioOutput::Container decodedAudioData;
+
 		opus_int32 decodedAudioLength = opus_decode(
-			decoder, decryptedData.data(), static_cast<int>(decryptedData.size()),
-			decodedAudioData.data(), frameSize, 1);
+			decoder,
+			decryptedData.data(), static_cast<int>(decryptedData.size()),
+			decodedAudioData.data(), frameSize, 
+			1
+		);
+
 		if(decodedAudioLength < OPUS_OK || !hasAudioOutput())
 			return;
+
 		AudioTransmissionDetails details(context, 0);
 		audioOutput->write(decodedAudioData, details);
 #endif

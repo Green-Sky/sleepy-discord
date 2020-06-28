@@ -195,6 +195,11 @@ namespace SleepyDiscord {
 			audioOutput = std::unique_ptr<BaseAudioOutput>(output);
 		} 
 
+		template<class AudioOutput, class... Types>
+		inline void setAudioOutput(Types&&... arguments) {
+			audioOutput = std::unique_ptr<AudioOutput>(std::forward<Types>(arguments)...);
+		} 
+
 		inline bool hasAudioOutput() const {
 			return audioOutput != nullptr;
 		}
@@ -220,6 +225,16 @@ namespace SleepyDiscord {
 		//=== startListening ===
 
 		void startListening();
+
+		inline void startListening(BaseAudioOutput* output) {
+			setAudioOutput(output);
+			startListening();
+		}
+
+		template<class AudioOutput, class... Types>
+		inline void startListening(Types&&... arguments) {
+			startListening(new AudioOutput(std::forward<Types>(arguments)...));
+		}
 
 		inline BaseDiscordClient& getDiscordClient() {
 			return *origin;
