@@ -148,7 +148,7 @@ namespace SleepyDiscord {
 		using Container = std::array<AudioSample, AudioTransmissionDetails::proposedLength()>;
 		BaseAudioOutput() = default;
 		virtual ~BaseAudioOutput() = default;
-		virtual void write(Container audio, AudioTransmissionDetails& details) {}
+		virtual void write(uint32_t ssrc, Container audio, AudioTransmissionDetails& details) {}
 	private:
 		friend VoiceConnection;
 	};

@@ -69,7 +69,7 @@ namespace SleepyDiscord {
 				"\"d\":{"
 					"\"server_id\":\"" ; resume += context.serverID ; resume += "\","
 					"\"session_id\":\""; resume += context.sessionID; resume += "\","
-					"\"token\":\""     ; resume += context.token    ; resume += "\""
+					"\"token\":\""	 ; resume += context.token	; resume += "\""
 				"}"
 			"}";
 		origin->send(resume, origin->connection);
@@ -105,7 +105,7 @@ namespace SleepyDiscord {
 						"\"server_id\": \"" ; identity += context.serverID ; identity += "\","
 						"\"user_id\": \""   ; identity += origin->getID()  ; identity += "\","
 						"\"session_id\": \""; identity += context.sessionID; identity += "\","
-						"\"token\": \""     ; identity += context.token    ; identity += "\""
+						"\"token\": \""	 ; identity += context.token	; identity += "\""
 					"}"
 				"}";
 			origin->send(identity, connection);
@@ -149,8 +149,8 @@ namespace SleepyDiscord {
 						"\"d\": {"
 							"\"protocol\": \"udp\","
 							"\"data\": {"
-								"\"address\": \""; protocol += iPAddress           ; protocol += "\","
-								"\"port\": "     ; protocol += std::to_string(port); protocol +=   ","
+								"\"address\": \""; protocol += iPAddress		   ; protocol += "\","
+								"\"port\": "	 ; protocol += std::to_string(port); protocol +=   ","
 								"\"mode\": \"xsalsa20_poly1305\""
 							"}"
 						"}"
@@ -229,10 +229,10 @@ namespace SleepyDiscord {
 		*/
 		std::string heartbeat;
 		heartbeat.reserve(17 + nonce.length());
-		heartbeat += 
+		heartbeat +=
 			"{"
 				"\"op\": 3, "
-				"\"d\": "; heartbeat += nonce; heartbeat += 
+				"\"d\": "; heartbeat += nonce; heartbeat +=
 			'}';
 		origin->send(heartbeat, connection);
 
@@ -269,8 +269,8 @@ namespace SleepyDiscord {
 				int opusError = 0;
 				encoder = opus_encoder_create(
 					/*Sampling rate(Hz)*/AudioTransmissionDetails::bitrate(),
-					/*Channels*/         AudioTransmissionDetails::channels(),
-					/*Mode*/             OPUS_APPLICATION_VOIP,
+					/*Channels*/		 AudioTransmissionDetails::channels(),
+					/*Mode*/			 OPUS_APPLICATION_VOIP,
 					&opusError);
 				if (opusError) {//error check
 					return;
@@ -400,16 +400,16 @@ namespace SleepyDiscord {
 			static_cast<uint8_t>((timestamp >> (8 * 2)) & 0xff),
 			static_cast<uint8_t>((timestamp >> (8 * 1)) & 0xff),
 			static_cast<uint8_t>((timestamp >> (8 * 0)) & 0xff),
-			static_cast<uint8_t>((sSRC      >> (8 * 3)) & 0xff),
-			static_cast<uint8_t>((sSRC      >> (8 * 2)) & 0xff),
-			static_cast<uint8_t>((sSRC      >> (8 * 1)) & 0xff),
-			static_cast<uint8_t>((sSRC      >> (8 * 0)) & 0xff),
+			static_cast<uint8_t>((sSRC	  >> (8 * 3)) & 0xff),
+			static_cast<uint8_t>((sSRC	  >> (8 * 2)) & 0xff),
+			static_cast<uint8_t>((sSRC	  >> (8 * 1)) & 0xff),
+			static_cast<uint8_t>((sSRC	  >> (8 * 0)) & 0xff),
 		};
-			
+
 		uint8_t nonce[nonceSize];
-		std::memcpy(nonce                , header, sizeof header);
-		std::memset(nonce + sizeof header,      0, sizeof nonce - sizeof header);
-		
+		std::memcpy(nonce				, header, sizeof header);
+		std::memset(nonce + sizeof header,	  0, sizeof nonce - sizeof header);
+
 		const size_t numOfBtyes = sizeof header + length + crypto_secretbox_MACBYTES;
 		std::vector<uint8_t> audioDataPacket(numOfBtyes);
 		std::memcpy(audioDataPacket.data(), header, sizeof header);
@@ -431,7 +431,7 @@ namespace SleepyDiscord {
 			int opusError = 0;
 			decoder = opus_decoder_create(
 				/*Sampling rate(Hz)*/AudioTransmissionDetails::bitrate(),
-				/*Channels*/         AudioTransmissionDetails::channels(),
+				/*Channels*/		 AudioTransmissionDetails::channels(),
 				&opusError);
 			if (opusError) {//error check
 				return;
@@ -442,7 +442,11 @@ namespace SleepyDiscord {
 
 	void VoiceConnection::listen() {
 		UDP.receive([this](const std::vector<uint8_t>& data){
-			processIncomingAudio(data);
+			if (data.size() <= 12) {
+				std::cerr << "got non rtp packet on voice connecton!!!\n";
+			} else {
+				processIncomingAudio(data);
+			}
 		});
 
 		scheduleNextTime(listenTimer,
@@ -455,44 +459,79 @@ namespace SleepyDiscord {
 	void VoiceConnection::processIncomingAudio(const std::vector<uint8_t>& data)
 	{
 #if !defined(NONEXISTENT_SODIUM) || !defined(NONEXISTENT_OPUS)
-		// this only works for xsalsa20_poly1305 which takes the rtp header(12byte) and 12 byte zeros as nonce
 
+		// header
+		constexpr int headerSize = 12;
+
+		// TODO: content type
+
+		uint32_t sSRC = 0;
+		sSRC = data[8]	<< 8*3;
+		sSRC = data[9]	<< 8*2;
+		sSRC = data[10]	<< 8*1;
+		sSRC = data[11]	<< 8*0;
+
+		// this only works for xsalsa20_poly1305 which takes the rtp header(12 byte) + 12 byte zeros as nonce
 		//get nonce
 		uint8_t nonce[nonceSize];
-		std::memcpy(nonce, data.data(), sizeof nonce);
+		//std::memcpy(nonce, data.data(), sizeof nonce);
+		std::memcpy(nonce, data.data(), headerSize);
+		std::memset(nonce + headerSize, 0, headerSize);
 
 		//decrypt
 		std::vector<uint8_t> decryptedData;
-		//const std::size_t decryptedDataSize = data.size() - sizeof nonce;
-		const std::size_t decryptedDataSize = data.size() - 12;
-		decryptedData.reserve(decryptedDataSize);
+		const std::size_t decryptedDataSize = data.size() - headerSize;
+		decryptedData.resize(decryptedDataSize);
 		bool isForged = crypto_secretbox_open_easy(
 			decryptedData.data(),
-			//data.data() + sizeof nonce,
-			data.data() + 12,
+			data.data() + headerSize,
 			decryptedDataSize, nonce, secretKey.data()
 		) != 0;
-		if (isForged)
+		if (isForged) {
+			std::cerr << "got decryption error for voice, forged?\n";
 			return;
+		}
+
+		// https://github.com/discordjs/discord.js/blob/master/src/client/voice/receiver/PacketHandler.js#L63
+		size_t offset = 0;
+		// Strip RTP Header Extensions (one-byte only)
+		if (decryptedData.size() > 4 && decryptedData[0] == 0xbe && decryptedData[1] == 0xde) { // single byte ext header
+			offset = 4;
+
+			const size_t header_extension_length = decryptedData[2] << 8 | decryptedData[3]; // only works on little endian
+
+			for (size_t i = 0; i < header_extension_length; i++) {
+				const uint8_t byte = decryptedData[offset];
+				offset++;
+				if (byte == 0) {
+					continue;
+				}
+				offset += 1 + (0x0f & (byte >> 4));
+			}
+			// Skip over undocumented Discord byte
+			offset++;
+		}
 
 		//decode
-		constexpr opus_int32 frameSize = 
+		constexpr opus_int32 frameSize =
 			static_cast<opus_int32>(AudioTransmissionDetails::proposedLength() / 2); // per channel
 
 		BaseAudioOutput::Container decodedAudioData;
 
 		opus_int32 decodedAudioLength = opus_decode(
 			decoder,
-			decryptedData.data(), static_cast<int>(decryptedData.size()),
-			decodedAudioData.data(), frameSize, 
+			decryptedData.data() + offset, static_cast<int>(decryptedData.size() - offset),
+			decodedAudioData.data(), frameSize,
 			1
 		);
 
-		if(decodedAudioLength < OPUS_OK || !hasAudioOutput())
+		if(decodedAudioLength < OPUS_OK || !hasAudioOutput()) {
+			std::cerr << "opus error\n";
 			return;
+		}
 
 		AudioTransmissionDetails details(context, 0);
-		audioOutput->write(decodedAudioData, details);
+		audioOutput->write(sSRC, decodedAudioData, details);
 #endif
 	}
 }
@@ -501,3 +540,4 @@ void SleepyDiscord::VoiceConnection::initialize() {}
 void SleepyDiscord::VoiceConnection::processMessage(const std::string &/*message*/) {}
 void SleepyDiscord::VoiceConnection::processCloseCode(const int16_t /*code*/) {}
 #endif
+
