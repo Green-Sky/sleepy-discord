@@ -1,4 +1,5 @@
 #pragma once
+#include <unordered_map>
 #include <vector>
 #include <array>
 #include <cstdint>
@@ -317,7 +318,8 @@ namespace SleepyDiscord {
 		std::size_t samplesSentLastTime = 0;
 		time_t nextTime = 0;
 		OpusEncoder *encoder = nullptr;
-		OpusDecoder *decoder = nullptr;
+		//OpusDecoder *decoder = nullptr;
+		std::unordered_map<uint32_t, OpusDecoder *> decoders;
 		uint16_t sequence = 0;
 		uint32_t timestamp = 0;
 

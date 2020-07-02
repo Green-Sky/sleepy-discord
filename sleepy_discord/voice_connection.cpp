@@ -7,7 +7,7 @@ namespace SleepyDiscord {
 	VoiceConnection::VoiceConnection(BaseDiscordClient* client, VoiceContext& _context) :
 		origin(client), context(_context), UDP(*origin), sSRC(0), port(0), nextTime(0),
 #if !defined(NONEXISTENT_OPUS)
-		encoder(nullptr), decoder(nullptr),
+		encoder(nullptr),
 #endif
 		secretKey()
 	{}
@@ -47,10 +47,13 @@ namespace SleepyDiscord {
 			opus_encoder_destroy(encoder);
 			encoder = nullptr;
 		}
-		if (decoder != nullptr) {
-			opus_decoder_destroy(decoder);
-			decoder = nullptr;
+
+		for (auto& it : decoders) {
+			if (it.second != nullptr) {
+				opus_decoder_destroy(it.second);
+			}
 		}
+		decoders.clear();
 #endif // !NONEXISTENT_OPUS
 	}
 
@@ -427,16 +430,16 @@ namespace SleepyDiscord {
 
 	//To do test this
 	void VoiceConnection::startListening() {
-		if (!(state & CAN_DECODE) || decoder == nullptr) {
-			int opusError = 0;
-			decoder = opus_decoder_create(
-				/*Sampling rate(Hz)*/AudioTransmissionDetails::bitrate(),
-				/*Channels*/		 AudioTransmissionDetails::channels(),
-				&opusError);
-			if (opusError) {//error check
-				return;
-			}
-		}
+		//if (!(state & CAN_DECODE) || decoder == nullptr) {
+			//int opusError = 0;
+			//decoder = opus_decoder_create(
+				//[>Sampling rate(Hz)<]AudioTransmissionDetails::bitrate(),
+				//[>Channels<]		 AudioTransmissionDetails::channels(),
+				//&opusError);
+			//if (opusError) {//error check
+				//return;
+			//}
+		//}
 		listen();
 	}
 
@@ -511,6 +514,19 @@ namespace SleepyDiscord {
 			// Skip over undocumented Discord byte
 			offset++;
 		}
+
+		// lazily create decoder
+		if (decoders.count(sSRC) == 0) {
+			int opusError = 0;
+			decoders[sSRC] = opus_decoder_create(
+				/*Sampling rate(Hz)*/AudioTransmissionDetails::bitrate(),
+				/*Channels*/		 AudioTransmissionDetails::channels(),
+				&opusError);
+			if (opusError) {//error check
+				return;
+			}
+		}
+		auto* decoder = decoders[sSRC];
 
 		//decode
 		constexpr opus_int32 frameSize =
