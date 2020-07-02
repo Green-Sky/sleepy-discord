@@ -466,7 +466,11 @@ namespace SleepyDiscord {
 		// header
 		constexpr int headerSize = 12;
 
-		// TODO: content type
+		uint8_t content_type = data[1] & 0x7f;
+
+		if (content_type != 0x78) { // not audio
+			return;
+		}
 
 		uint32_t sSRC = 0;
 		sSRC = data[8]	<< 8*3;
